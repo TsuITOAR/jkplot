@@ -1,0 +1,16 @@
+[package]
+name = "jkplot"
+version = "0.1.0"
+edition = "2021"
+authors = ["TsuITOAR"]
+description = "personal use crate for some quick data visualization"
+license = "MIT"
+readme = "README.md"
+homepage = "https://github.com/TsuITOAR/jkplot"
+repository = "https://github.com/TsuITOAR/jkplot"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+
+[dependencies]
+plotters = "^0.3"
