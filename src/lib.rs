@@ -21,7 +21,7 @@ where
     frame: usize,
 }
 
-pub enum DrawRange<A> {
+enum DrawRange<A> {
     Auto,
     Static(A),
 }
