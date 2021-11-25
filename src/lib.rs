@@ -129,7 +129,7 @@ impl GifVisualizer<Range<f64>, Range<f64>> {
                             let axis_mod = base / 2. * base.powf(range.log(base).floor());
                             range = (range / axis_mod).ceil() * axis_mod;
                             let center = (y.end + y.start) / 2.;
-                            let axis_mod = axis_mod / (base / 2.);
+                            let axis_mod = axis_mod / base ;
                             y.start = ((center - range / 2.) / axis_mod).floor() * axis_mod;
                             y.end = ((center + range / 2.) / axis_mod).ceil() * axis_mod;
                             y
