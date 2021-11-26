@@ -93,7 +93,7 @@ impl GifVisualizer<Range<f64>, Range<f64>> {
     where
         S: IntoIterator<Item = (f64, f64)>,
     {
-        let (v, x_range, y_range): (Box<dyn Iterator<Item = (f64, f64)>>, Range<f64>, Range<f64>) =
+        let (v, x_range, y_range): (Box<dyn Iterator<Item = (f64, f64)>>, _, _) =
             if let (DrawRange::Static(a), DrawRange::Static(b)) = (&self.x_range, &self.y_range) {
                 (Box::new(series.into_iter()), a.clone(), b.clone())
             } else {
@@ -182,7 +182,7 @@ impl GifVisualizer<Range<f64>, Range<f64>> {
                 self.caption
                     .as_ref()
                     .map(|x| format!("{} {}", x, self.frame))
-                    .unwrap_or(self.frame.to_string()),
+                    .unwrap_or_else(|| self.frame.to_string()),
                 ("sans-serif", self.y_size / 20),
             )
             .build_cartesian_2d(
@@ -216,7 +216,7 @@ impl GifVisualizer<Range<f64>, Range<f64>> {
         mesh.axis_style(BLACK.stroke_width(self.x_size / 1000 + 1))
             .draw()
             .expect("drawing mesh");
-        ctx.draw_series(LineSeries::new(v.into_iter(), RED))
+        ctx.draw_series(LineSeries::new(v, RED))
             .expect("plotting points");
         self.gif.present().expect("flushing current frame");
         self.frame += 1;
