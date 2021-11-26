@@ -3,6 +3,10 @@ use plotters::{
     prelude::*,
 };
 use std::{ops::Range, path::Path};
+
+const MIN_BASE: f64 = 10.;
+const MAX_MAINTAIN: u32 = 100;
+
 pub struct GifVisualizer<X = Range<f64>, Y = Range<f64>>
 where
     X: AsRangedCoord,
@@ -11,6 +15,8 @@ where
     gif: DrawingArea<BitMapBackend<'static>, Shift>,
     x_range: DrawRange<X>,
     y_range: DrawRange<Y>,
+    last_y_range: Option<Y>,
+    last_refresh: u32,
     x_size: u32,
     y_size: u32,
     caption: Option<String>,
@@ -34,6 +40,8 @@ impl GifVisualizer<Range<f64>, Range<f64>> {
                 .into_drawing_area(),
             x_range: DrawRange::Auto,
             y_range: DrawRange::Auto,
+            last_y_range: None,
+            last_refresh: 0,
             x_size: size.0,
             y_size: size.1,
             caption: None,
@@ -122,19 +130,46 @@ impl GifVisualizer<Range<f64>, Range<f64>> {
                 let y_range = if let DrawRange::Static(ref b) = self.y_range {
                     b.clone()
                 } else {
-                    temp_y_range
-                        .map(|mut y| {
-                            let base = 10_f64;
-                            let mut range = y.end - y.start;
-                            let axis_mod = base / 2. * base.powf(range.log(base).floor());
-                            range = (range / axis_mod).ceil() * axis_mod;
-                            let center = (y.end + y.start) / 2.;
-                            let axis_mod = axis_mod / base ;
-                            y.start = ((center - range / 2.) / axis_mod).floor() * axis_mod;
-                            y.end = ((center + range / 2.) / axis_mod).ceil() * axis_mod;
-                            y
-                        })
-                        .unwrap_or(0. ..1.)
+                    match self.last_y_range {
+                        Some(ref last)
+                            if temp_y_range
+                                .as_ref()
+                                .map(|x| {
+                                    last.start < x.start
+                                        && last.end > x.end
+                                        && (last.end - last.start).abs()
+                                            < (x.end - x.start).abs() * MIN_BASE
+                                })
+                                .unwrap_or(true)
+                                && self.last_refresh <= MAX_MAINTAIN =>
+                        {
+                            //as long as last range can hold current range and not too big, we keep use last range
+                            self.last_refresh += 1;
+                            last.clone()
+                        }
+                        _ => {
+                            self.last_refresh = 0;
+                            temp_y_range
+                                .map(|mut y| {
+                                    let base: f64 = MIN_BASE;
+                                    let mut range = (y.end - y.start).abs();
+                                    let axis_mod = base.powi(range.log(base).floor() as i32);
+                                    let scale_dis = base.sqrt().ceil();
+                                    range = ((range / axis_mod / scale_dis).ceil()) * scale_dis;
+                                    if range > base {
+                                        //make sure ceil() won't overflow base
+                                        range = base;
+                                    }
+                                    range *= axis_mod;
+                                    let center = (y.start + y.end) / 2.;
+                                    y.start = center - range / 2.;
+                                    y.end = center + range / 2.;
+                                    self.last_y_range = y.clone().into();
+                                    y
+                                })
+                                .unwrap_or(0. ..1.)
+                        }
+                    }
                 };
                 (Box::new(temp.into_iter()), x_range, y_range)
             };
@@ -150,11 +185,22 @@ impl GifVisualizer<Range<f64>, Range<f64>> {
                     .unwrap_or(self.frame.to_string()),
                 ("sans-serif", self.y_size / 20),
             )
-            .build_cartesian_2d(x_range, y_range)
+            .build_cartesian_2d(
+                x_range,
+                y_range.clone().step(
+                    MIN_BASE
+                        .powi(
+                            ((y_range.end - y_range.start).abs().log(MIN_BASE) - 0.1).floor() //if not -0.1 and just over 1, only 1 index will be draw 
+                                as i32,
+                        )
+                        .copysign(y_range.end - y_range.start),
+                ),
+            )
             .expect("building chart context");
         let mut mesh = ctx.configure_mesh();
         mesh.x_label_style(("sans-serif", self.x_size / 40))
-            .y_label_style(("sans-serif", self.y_size / 40));
+            .y_label_style(("sans-serif", self.y_size / 40))
+            .y_labels(12);
         if let Some(ref s) = self.x_desc {
             mesh.x_desc(s);
         }
@@ -314,6 +360,7 @@ impl<P: AsRef<Path>> ColorMapVisualizer<P, f64> {
             mesh.y_label_formatter(f);
         }
         mesh.draw().expect("drawing mesh");
+        dbg!(&range);
         chart
             .draw_series(
                 self.matrix
