@@ -360,7 +360,6 @@ impl<P: AsRef<Path>> ColorMapVisualizer<P, f64> {
             mesh.y_label_formatter(f);
         }
         mesh.draw().expect("drawing mesh");
-        dbg!(&range);
         chart
             .draw_series(
                 self.matrix
