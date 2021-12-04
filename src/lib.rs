@@ -223,8 +223,12 @@ impl GifVisualizer<Range<f64>, Range<f64>> {
     }
 }
 
-pub struct ColorMapVisualizer<P, B = f64>
-where
+pub struct ColorMapVisualizer<
+    P,
+    B = f64,
+    XF: Fn(&usize) -> String = fn(&usize) -> String,
+    YF: Fn(&usize) -> String = fn(&usize) -> String,
+> where
     P: AsRef<Path>,
 {
     path: P,
@@ -235,12 +239,12 @@ where
     caption: Option<String>,
     x_desc: Option<String>,
     y_desc: Option<String>,
-    x_label_formatter: Option<Box<dyn Fn(&usize) -> String>>,
-    y_label_formatter: Option<Box<dyn Fn(&usize) -> String>>,
+    x_label_formatter: Option<XF>,
+    y_label_formatter: Option<YF>,
     auto_range: Option<Range<B>>,
 }
 
-impl<P: AsRef<Path>> ColorMapVisualizer<P, f64> {
+impl<P: AsRef<Path>> ColorMapVisualizer<P, f64, fn(&usize) -> String, fn(&usize) -> String> {
     pub fn new(path: P, size: (u32, u32)) -> Self {
         Self {
             path,
@@ -272,18 +276,12 @@ impl<P: AsRef<Path>> ColorMapVisualizer<P, f64> {
         self.y_desc = Some(s.to_string());
         self
     }
-    pub fn set_x_label_formatter(
-        &mut self,
-        x_formatter: impl Fn(&usize) -> String + 'static,
-    ) -> &mut Self {
-        self.x_label_formatter = Some(Box::new(x_formatter));
+    pub fn set_x_label_formatter(&mut self, x_formatter: fn(&usize) -> String) -> &mut Self {
+        self.x_label_formatter = Some(x_formatter);
         self
     }
-    pub fn set_y_label_formatter(
-        &mut self,
-        y_formatter: impl Fn(&usize) -> String + 'static,
-    ) -> &mut Self {
-        self.y_label_formatter = Some(Box::new(y_formatter));
+    pub fn set_y_label_formatter(&mut self, y_formatter: fn(&usize) -> String) -> &mut Self {
+        self.y_label_formatter = Some(y_formatter);
         self
     }
     pub fn push(&mut self, row: Vec<f64>) -> &mut Self {
