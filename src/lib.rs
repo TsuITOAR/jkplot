@@ -395,7 +395,7 @@ impl<P: AsRef<Path>> ColorMapVisualizer<P, f64, fn(&usize) -> String, fn(&usize)
         let mut mesh = chart.configure_mesh();
         let step = (range_max - range_min) / (column_len - 1).max(1) as f64;
         let iten_map = |x: usize| step * x as f64 + range_min;
-        let formatter = |x: &usize| format!("{}", iten_map(*x));
+        let formatter = |x: &usize| format!("{:.2e}", iten_map(*x));
         mesh.disable_x_mesh()
             .disable_y_mesh()
             .disable_x_axis()
