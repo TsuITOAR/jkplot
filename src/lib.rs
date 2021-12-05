@@ -390,26 +390,22 @@ impl<P: AsRef<Path>> ColorMapVisualizer<P, f64, fn(&usize) -> String, fn(&usize)
             .y_label_area_size(self.x_size / 10)
             .x_label_area_size(self.y_size / 10);
         let mut chart = builder
-            .build_cartesian_2d(0usize..1, (0..column_len).step(column_len / 5))
+            .build_cartesian_2d((0.)..1., range_min..range_max)
             .expect("building colorbar");
         let mut mesh = chart.configure_mesh();
-        let step = (range_max - range_min) / (column_len - 1).max(1) as f64;
-        let iten_map = |x: usize| step * x as f64 + range_min;
-        let formatter = |x: &usize| format!("{:.2e}", iten_map(*x));
+        let step = range / (column_len - 1).max(1) as f64;
         mesh.disable_x_mesh()
             .disable_y_mesh()
             .disable_x_axis()
-            .y_label_style(("sans-serif", self.x_size / 40))
-            .y_label_formatter(&formatter as &dyn Fn(&usize) -> String);
+            .y_label_style(("sans-serif", self.x_size / 40));
         mesh.draw().expect("drawing colorbar mesh");
         chart
             .draw_series(
-                (0..column_len)
-                    .into_iter()
-                    .map(|i| (i, iten_map(i)))
-                    .map(|(i, v)| {
+                std::iter::successors(Some(range_min), |x| Some(step + x))
+                    .take_while(|x| *x <= range_max)
+                    .map(|v| {
                         Rectangle::new(
-                            [(0, i), (1, i + 1)],
+                            [(0., v - step / 2.), (1., v + step / 2.)],
                             HSLColor(
                                 240.0 / 360.0 - 240.0 / 360.0 * color_map(v),
                                 0.7,
