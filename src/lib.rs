@@ -1,6 +1,7 @@
 use plotters::{
     coord::{ranged1d::AsRangedCoord, Shift},
     prelude::*,
+    style::RelativeSize,
 };
 use std::{ops::Range, path::Path};
 
@@ -317,14 +318,16 @@ impl<P: AsRef<Path>> ColorMapVisualizer<P, f64, fn(&usize) -> String, fn(&usize)
         } else {
             1.
         };
-
+        let color_map = |v| ((v - range_min) / range);
         let area = BitMapBackend::new(&self.path, (self.x_size, self.y_size)).into_drawing_area();
         area.fill(&WHITE).expect("filling area background");
+        let (area, bar) = area.split_horizontally(RelativeSize::Width(0.85));
         let mut builder = ChartBuilder::on(&area);
         builder
             .margin_right(self.x_size / 50)
-            .x_label_area_size(self.x_size / 10)
-            .y_label_area_size(self.y_size / 10);
+            .margin_top(self.y_size / 50)
+            .y_label_area_size(self.x_size / 10)
+            .x_label_area_size(self.y_size / 10);
         if let Some(s) = self.caption {
             builder.caption(s, ("sans-serif", self.y_size / 20));
         }
@@ -341,8 +344,8 @@ impl<P: AsRef<Path>> ColorMapVisualizer<P, f64, fn(&usize) -> String, fn(&usize)
             )
             .expect("building chart context");
         let mut mesh = chart.configure_mesh();
-        mesh.x_label_style(("sans-serif", self.x_size / 40))
-            .y_label_style(("sans-serif", self.y_size / 40))
+        mesh.x_label_style(("sans-serif", self.y_size / 40))
+            .y_label_style(("sans-serif", self.x_size / 40))
             .disable_x_mesh()
             .disable_y_mesh();
         if let Some(ref s) = self.x_desc {
@@ -369,9 +372,9 @@ impl<P: AsRef<Path>> ColorMapVisualizer<P, f64, fn(&usize) -> String, fn(&usize)
                         Rectangle::new(
                             [(x, y), (x + 1, y + 1)],
                             HSLColor(
-                                240.0 / 360.0 - 240.0 / 360.0 * ((v - range_min) / range),
+                                240.0 / 360.0 - 240.0 / 360.0 * color_map(v),
                                 0.7,
-                                0.1 + 0.4 * ((v - range_min) / range),
+                                0.1 + 0.4 * color_map(v),
                             )
                             .filled(),
                         )
@@ -379,5 +382,44 @@ impl<P: AsRef<Path>> ColorMapVisualizer<P, f64, fn(&usize) -> String, fn(&usize)
             )
             .expect("plotting pixels");
         area.present().expect("writing picture to file");
+
+        let mut builder = ChartBuilder::on(&bar);
+        builder
+            .margin_right(self.x_size / 50)
+            .margin_top(self.y_size / 50)
+            .y_label_area_size(self.x_size / 10)
+            .x_label_area_size(self.y_size / 10);
+        let mut chart = builder
+            .build_cartesian_2d(0usize..1, (0..column_len).step(column_len / 5))
+            .expect("building colorbar");
+        let mut mesh = chart.configure_mesh();
+        let step = (range_max - range_min) / (column_len - 1).max(1) as f64;
+        let iten_map = |x: usize| step * x as f64 + range_min;
+        let formatter = |x: &usize| format!("{}", iten_map(*x));
+        mesh.disable_x_mesh()
+            .disable_y_mesh()
+            .disable_x_axis()
+            .y_label_style(("sans-serif", self.x_size / 40))
+            .y_label_formatter(&formatter as &dyn Fn(&usize) -> String);
+        mesh.draw().expect("drawing colorbar mesh");
+        chart
+            .draw_series(
+                (0..column_len)
+                    .into_iter()
+                    .map(|i| (i, iten_map(i)))
+                    .map(|(i, v)| {
+                        Rectangle::new(
+                            [(0, i), (1, i + 1)],
+                            HSLColor(
+                                240.0 / 360.0 - 240.0 / 360.0 * color_map(v),
+                                0.7,
+                                0.1 + 0.4 * color_map(v),
+                            )
+                            .filled(),
+                        )
+                    }),
+            )
+            .expect("plotting colorbar");
+        bar.present().expect("writing colorbar to file");
     }
 }
