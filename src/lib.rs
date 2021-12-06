@@ -329,7 +329,7 @@ impl<P: AsRef<Path>> ColorMapVisualizer<P, f64, fn(&usize) -> String, fn(&usize)
             .y_label_area_size(self.x_size / 10)
             .x_label_area_size(self.y_size / 10);
         if let Some(s) = self.caption {
-            builder.caption(s, ("sans-serif", self.y_size / 20));
+            builder.caption(s, ("sans-serif", self.y_size / 40));
         }
         let row_len = self
             .matrix
