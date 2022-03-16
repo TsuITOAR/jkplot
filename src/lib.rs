@@ -194,15 +194,15 @@ impl<DB: DrawingBackend> Animator<DB, Range<f64>, Range<f64>> {
             };
         self.draw_area.fill(&WHITE).expect("filling background");
         let mut ctx = ChartBuilder::on(&self.draw_area)
-            .margin_right(0.02.percent_width())
-            .x_label_area_size(0.1.percent_height())
-            .y_label_area_size(0.1.percent_width())
+            .margin_right(2.percent_width())
+            .x_label_area_size(10.percent_height())
+            .y_label_area_size(10.percent_width())
             .caption(
                 self.caption
                     .as_ref()
                     .map(|x| format!("{} {}", x, self.frame))
                     .unwrap_or_else(|| self.frame.to_string()),
-                ("sans-serif", 0.05.percent_height()),
+                ("sans-serif", 5.percent_height()),
             )
             .build_cartesian_2d(
                 x_range,
@@ -217,8 +217,8 @@ impl<DB: DrawingBackend> Animator<DB, Range<f64>, Range<f64>> {
             )
             .expect("building chart context");
         let mut mesh = ctx.configure_mesh();
-        mesh.x_label_style(("sans-serif", 0.025.percent_height()))
-            .y_label_style(("sans-serif", 0.025.percent_width()))
+        mesh.x_label_style(("sans-serif", 5.percent_height()))
+            .y_label_style(("sans-serif", 5.percent_width()))
             .y_labels(12);
         if let Some(ref s) = self.x_desc {
             mesh.x_desc(s);
@@ -232,7 +232,7 @@ impl<DB: DrawingBackend> Animator<DB, Range<f64>, Range<f64>> {
         if let Some(ref f) = self.y_label_formatter {
             mesh.y_label_formatter(f);
         }
-        mesh.axis_style(BLACK.stroke_width(1e-3.percent().in_pixels(&self.draw_area) as u32 + 1))
+        mesh.axis_style(BLACK.stroke_width(0.1.percent().in_pixels(&self.draw_area) as u32 + 1))
             .draw()
             .expect("drawing mesh");
         ctx.draw_series(LineSeries::new(v, RED))
@@ -352,12 +352,18 @@ impl<DB: DrawingBackend> ColorMapVisualizer<DB, f64, fn(&usize) -> String, fn(&u
         let (area, bar) = self.draw_area.split_horizontally(RelativeSize::Width(0.85));
         let mut builder = ChartBuilder::on(&area);
         builder
-            .margin_right(0.02.percent_width())
-            .margin_top(0.02.percent_height())
-            .y_label_area_size(0.1.percent_width())
-            .x_label_area_size(0.1.percent_height());
+            .margin_right(2.percent_width().in_pixels(&self.draw_area))
+            .margin_top(2.percent_height().in_pixels(&self.draw_area))
+            .y_label_area_size(10.percent_width().in_pixels(&self.draw_area))
+            .x_label_area_size(10.percent_height().in_pixels(&self.draw_area));
         if let Some(s) = self.caption {
-            builder.caption(s, ("sans-serif", 0.025.percent_height()));
+            builder.caption(
+                s,
+                (
+                    "sans-serif",
+                    2.5.percent_height().in_pixels(&self.draw_area),
+                ),
+            );
         }
         let row_len = self
             .matrix
@@ -372,8 +378,8 @@ impl<DB: DrawingBackend> ColorMapVisualizer<DB, f64, fn(&usize) -> String, fn(&u
             )
             .expect("building chart context");
         let mut mesh = chart.configure_mesh();
-        mesh.x_label_style(("sans-serif", 0.025.percent_height()))
-            .y_label_style(("sans-serif", 0.025.percent_width()))
+        mesh.x_label_style(("sans-serif", 5.percent_height().in_pixels(&self.draw_area)))
+            .y_label_style(("sans-serif", 5.percent_width().in_pixels(&self.draw_area)))
             .disable_x_mesh()
             .disable_y_mesh();
         if let Some(ref s) = self.x_desc {
@@ -413,10 +419,10 @@ impl<DB: DrawingBackend> ColorMapVisualizer<DB, f64, fn(&usize) -> String, fn(&u
 
         let mut builder = ChartBuilder::on(&bar);
         builder
-            .margin_right(0.02.percent_width())
-            .margin_top(0.02.percent_height())
-            .y_label_area_size(0.01.percent_width())
-            .x_label_area_size(0.01.percent_height());
+            .margin_right(2.percent_width().in_pixels(&self.draw_area))
+            .margin_top(2.percent_height().in_pixels(&self.draw_area))
+            .margin_bottom(10.percent_height().in_pixels(&self.draw_area)) //take the space for hidden x axis
+            .y_label_area_size(10.percent_width().in_pixels(&self.draw_area));
         let mut chart = builder
             .build_cartesian_2d((0.)..1., range_min..range_max)
             .expect("building colorbar");
@@ -425,7 +431,7 @@ impl<DB: DrawingBackend> ColorMapVisualizer<DB, f64, fn(&usize) -> String, fn(&u
         mesh.disable_x_mesh()
             .disable_y_mesh()
             .disable_x_axis()
-            .y_label_style(("sans-serif", 0.025.percent_width()));
+            .y_label_style(("sans-serif", 5.percent_width().in_pixels(&self.draw_area)));
         mesh.draw().expect("drawing colorbar mesh");
         chart
             .draw_series(
