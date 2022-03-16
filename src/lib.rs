@@ -275,6 +275,19 @@ impl<'a> ColorMapVisualizer<BitMapBackend<'a>, f64, fn(&usize) -> String, fn(&us
     }
 }
 impl<DB: DrawingBackend> ColorMapVisualizer<DB, f64, fn(&usize) -> String, fn(&usize) -> String> {
+    pub fn on_backend(back_end: DB) -> Self {
+        Self {
+            draw_area: back_end.into_drawing_area(),
+            matrix: Vec::new(),
+            color_range: DrawRange::Auto,
+            caption: None,
+            x_desc: None,
+            y_desc: None,
+            x_label_formatter: None,
+            y_label_formatter: None,
+            auto_range: None,
+        }
+    }
     pub fn set_color_range(&mut self, x: Range<f64>) -> &mut Self {
         self.color_range = DrawRange::Static(x);
         self
