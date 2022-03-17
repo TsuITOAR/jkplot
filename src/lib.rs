@@ -30,6 +30,7 @@ where
     min_y_range: Option<f64>,
 }
 
+#[derive(Debug, Clone, Copy)]
 enum DrawRange<A> {
     Auto,
     Static(A),
@@ -359,12 +360,13 @@ impl<DB: DrawingBackend> ColorMapVisualizer<DB, f64, fn(&usize) -> String, fn(&u
         self
     }
     pub fn draw(
-        self,
+        &self,
     ) -> Result<impl Fn((i32, i32)) -> Option<(usize, usize)>, DrawingAreaErrorKind<DB::ErrorType>>
     {
-        let (range_max, range_min) = match self.color_range {
+        let (range_max, range_min) = match self.color_range.clone() {
             DrawRange::Auto => self
                 .auto_range
+                .clone()
                 .map(|x| (x.end, x.start))
                 .unwrap_or((1., 0.)),
             DrawRange::Static(s) => (s.end, s.start),
@@ -374,7 +376,7 @@ impl<DB: DrawingBackend> ColorMapVisualizer<DB, f64, fn(&usize) -> String, fn(&u
         } else {
             1.
         };
-        let color_map = |v| ((v - range_min) / range);
+        let color_map = |v: f64| ((v - range_min) / range);
         self.draw_area.fill(&WHITE)?;
         let (area, bar) = self.draw_area.split_horizontally(RelativeSize::Width(0.85));
         let mut builder_map = ChartBuilder::on(&area);
@@ -383,7 +385,7 @@ impl<DB: DrawingBackend> ColorMapVisualizer<DB, f64, fn(&usize) -> String, fn(&u
             .margin_top(2.percent_height().in_pixels(&self.draw_area))
             .y_label_area_size(10.percent_width().in_pixels(&self.draw_area))
             .x_label_area_size(10.percent_height().in_pixels(&self.draw_area));
-        if let Some(s) = self.caption {
+        if let Some(ref s) = self.caption {
             builder_map.caption(
                 s,
                 (
@@ -419,7 +421,7 @@ impl<DB: DrawingBackend> ColorMapVisualizer<DB, f64, fn(&usize) -> String, fn(&u
         mesh_map.draw()?;
         chart_map.draw_series(
             self.matrix
-                .into_iter()
+                .iter()
                 .enumerate()
                 .map(|(y, l)| l.into_iter().enumerate().map(move |(x, v)| (x, y, v)))
                 .flatten()
@@ -427,9 +429,9 @@ impl<DB: DrawingBackend> ColorMapVisualizer<DB, f64, fn(&usize) -> String, fn(&u
                     Rectangle::new(
                         [(x, y), (x + 1, y + 1)],
                         HSLColor(
-                            240.0 / 360.0 - 240.0 / 360.0 * color_map(v),
+                            240.0 / 360.0 - 240.0 / 360.0 * color_map(*v),
                             0.7,
-                            0.1 + 0.4 * color_map(v),
+                            0.1 + 0.4 * color_map(*v),
                         )
                         .filled(),
                     )
