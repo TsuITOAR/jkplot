@@ -3,7 +3,9 @@ use plotters::{
     prelude::*,
     style::{RelativeSize, SizeDesc},
 };
-use std::{ops::Range, path::Path};
+use std::ops::Range;
+#[cfg(not(target_arch = "wasm32"))]
+use std::path::Path;
 
 const MIN_BASE: f64 = 10.;
 const MAX_MAINTAIN: u32 = 100;
@@ -25,6 +27,7 @@ where
     x_label_formatter: Option<Box<dyn Fn(&<X as AsRangedCoord>::Value) -> String>>,
     y_label_formatter: Option<Box<dyn Fn(&<Y as AsRangedCoord>::Value) -> String>>,
     frame: usize,
+    min_y_range: Option<f64>,
 }
 
 enum DrawRange<A> {
@@ -37,6 +40,7 @@ where
     X: AsRangedCoord,
     Y: AsRangedCoord,
 {
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn new<T: AsRef<Path>>(path: T, size: (u32, u32), frame_rate: u32) -> Self {
         Self {
             draw_area: BitMapBackend::gif(path, size, 1000 / frame_rate)
@@ -52,6 +56,7 @@ where
             x_label_formatter: None,
             y_label_formatter: None,
             frame: 0,
+            min_y_range: None,
         }
     }
 }
@@ -69,6 +74,7 @@ impl<DB: DrawingBackend> Animator<DB, Range<f64>, Range<f64>> {
             x_label_formatter: None,
             y_label_formatter: None,
             frame: 0,
+            min_y_range: None,
         }
     }
     pub fn set_x_range(&mut self, x: Range<f64>) -> &mut Self {
@@ -105,10 +111,17 @@ impl<DB: DrawingBackend> Animator<DB, Range<f64>, Range<f64>> {
         self.y_label_formatter = Some(Box::new(y_formatter));
         self
     }
+    pub fn set_min_y_range(&mut self, min_y: f64) -> &mut Self {
+        self.min_y_range = min_y.into();
+        self
+    }
     pub fn get_frame_num(&self) -> usize {
         self.frame
     }
-    pub fn new_frame<S>(&mut self, series: S)
+    pub fn new_frame<S>(
+        &mut self,
+        series: S,
+    ) -> Result<impl Fn((i32, i32)) -> Option<(f64, f64)>, DrawingAreaErrorKind<DB::ErrorType>>
     where
         S: IntoIterator<Item = (f64, f64)>,
     {
@@ -172,8 +185,13 @@ impl<DB: DrawingBackend> Animator<DB, Range<f64>, Range<f64>> {
                                 .map(|mut y| {
                                     let base: f64 = MIN_BASE;
                                     let mut range = (y.end - y.start).abs();
+                                    if let Some(min) = self.min_y_range {
+                                        if min > range {
+                                            range = min
+                                        }
+                                    };
                                     let axis_mod = base.powi(range.log(base).floor() as i32);
-                                    let scale_dis = base.sqrt().ceil();
+                                    let scale_dis = base * 0.2;
                                     range = ((range / axis_mod / scale_dis).ceil()) * scale_dis;
                                     if range > base {
                                         //make sure ceil() won't overflow base
@@ -181,8 +199,17 @@ impl<DB: DrawingBackend> Animator<DB, Range<f64>, Range<f64>> {
                                     }
                                     range *= axis_mod;
                                     let center = (y.start + y.end) / 2.;
-                                    y.start = center - range / 2.;
-                                    y.end = center + range / 2.;
+                                    if y.start < y.end {
+                                        y.start =
+                                            ((center - range / 2.) / axis_mod).floor() * axis_mod;
+                                        y.end =
+                                            ((center + range / 2.) / axis_mod).ceil() * axis_mod;
+                                    } else {
+                                        y.start =
+                                            ((center + range / 2.) / axis_mod).ceil() * axis_mod;
+                                        y.end =
+                                            ((center - range / 2.) / axis_mod).floor() * axis_mod;
+                                    }
                                     self.last_y_range = y.clone().into();
                                     y
                                 })
@@ -192,7 +219,7 @@ impl<DB: DrawingBackend> Animator<DB, Range<f64>, Range<f64>> {
                 };
                 (Box::new(temp.into_iter()), x_range, y_range)
             };
-        self.draw_area.fill(&WHITE).expect("filling background");
+        self.draw_area.fill(&WHITE)?;
         let mut ctx = ChartBuilder::on(&self.draw_area)
             .margin_right(2.percent_width())
             .x_label_area_size(10.percent_height())
@@ -214,11 +241,10 @@ impl<DB: DrawingBackend> Animator<DB, Range<f64>, Range<f64>> {
                         )
                         .copysign(y_range.end - y_range.start),
                 ),
-            )
-            .expect("building chart context");
+            )?;
         let mut mesh = ctx.configure_mesh();
-        mesh.x_label_style(("sans-serif", 5.percent_height()))
-            .y_label_style(("sans-serif", 5.percent_width()))
+        mesh.x_label_style(("sans-serif", 5.percent()))
+            .y_label_style(("sans-serif", 5.percent()))
             .y_labels(12);
         if let Some(ref s) = self.x_desc {
             mesh.x_desc(s);
@@ -233,12 +259,11 @@ impl<DB: DrawingBackend> Animator<DB, Range<f64>, Range<f64>> {
             mesh.y_label_formatter(f);
         }
         mesh.axis_style(BLACK.stroke_width(0.1.percent().in_pixels(&self.draw_area) as u32 + 1))
-            .draw()
-            .expect("drawing mesh");
-        ctx.draw_series(LineSeries::new(v, RED))
-            .expect("plotting points");
-        self.draw_area.present().expect("flushing current frame");
+            .draw()?;
+        ctx.draw_series(LineSeries::new(v, RED))?;
+        self.draw_area.present()?;
         self.frame += 1;
+        return Ok(ctx.into_coord_trans());
     }
 }
 
@@ -259,6 +284,7 @@ pub struct ColorMapVisualizer<
     auto_range: Option<Range<B>>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl<'a> ColorMapVisualizer<BitMapBackend<'a>, f64, fn(&usize) -> String, fn(&usize) -> String> {
     pub fn new<P: AsRef<Path>>(path: &'a P, size: (u32, u32)) -> Self {
         Self {
@@ -332,7 +358,10 @@ impl<DB: DrawingBackend> ColorMapVisualizer<DB, f64, fn(&usize) -> String, fn(&u
         self.matrix.push(row);
         self
     }
-    pub fn draw(self) {
+    pub fn draw(
+        self,
+    ) -> Result<impl Fn((i32, i32)) -> Option<(usize, usize)>, DrawingAreaErrorKind<DB::ErrorType>>
+    {
         let (range_max, range_min) = match self.color_range {
             DrawRange::Auto => self
                 .auto_range
@@ -346,18 +375,16 @@ impl<DB: DrawingBackend> ColorMapVisualizer<DB, f64, fn(&usize) -> String, fn(&u
             1.
         };
         let color_map = |v| ((v - range_min) / range);
-        self.draw_area
-            .fill(&WHITE)
-            .expect("filling area background");
+        self.draw_area.fill(&WHITE)?;
         let (area, bar) = self.draw_area.split_horizontally(RelativeSize::Width(0.85));
-        let mut builder = ChartBuilder::on(&area);
-        builder
+        let mut builder_map = ChartBuilder::on(&area);
+        builder_map
             .margin_right(2.percent_width().in_pixels(&self.draw_area))
             .margin_top(2.percent_height().in_pixels(&self.draw_area))
             .y_label_area_size(10.percent_width().in_pixels(&self.draw_area))
             .x_label_area_size(10.percent_height().in_pixels(&self.draw_area));
         if let Some(s) = self.caption {
-            builder.caption(
+            builder_map.caption(
                 s,
                 (
                     "sans-serif",
@@ -365,91 +392,82 @@ impl<DB: DrawingBackend> ColorMapVisualizer<DB, f64, fn(&usize) -> String, fn(&u
                 ),
             );
         }
-        let row_len = self
-            .matrix
-            .last()
-            .expect("getting last row of matrix")
-            .len();
+        let row_len = self.matrix.last().map_or(0, |r| r.len());
         let column_len = self.matrix.len();
-        let mut chart = builder
-            .build_cartesian_2d(
-                (0..row_len).step(row_len / 5),
-                (0..column_len).step(column_len / 5),
-            )
-            .expect("building chart context");
-        let mut mesh = chart.configure_mesh();
-        mesh.x_label_style(("sans-serif", 5.percent_height().in_pixels(&self.draw_area)))
+        let mut chart_map = builder_map.build_cartesian_2d(
+            (0..row_len).step(row_len / 5),
+            (0..column_len).step(column_len / 5),
+        )?;
+        let mut mesh_map = chart_map.configure_mesh();
+        mesh_map
+            .x_label_style(("sans-serif", 5.percent_height().in_pixels(&self.draw_area)))
             .y_label_style(("sans-serif", 5.percent_width().in_pixels(&self.draw_area)))
             .disable_x_mesh()
             .disable_y_mesh();
         if let Some(ref s) = self.x_desc {
-            mesh.x_desc(s);
+            mesh_map.x_desc(s);
         }
         if let Some(ref s) = self.y_desc {
-            mesh.y_desc(s);
+            mesh_map.y_desc(s);
         }
         if let Some(ref f) = self.x_label_formatter {
-            mesh.x_label_formatter(f);
+            mesh_map.x_label_formatter(f);
         }
         if let Some(ref f) = self.y_label_formatter {
-            mesh.y_label_formatter(f);
+            mesh_map.y_label_formatter(f);
         }
-        mesh.draw().expect("drawing mesh");
-        chart
-            .draw_series(
-                self.matrix
-                    .into_iter()
-                    .enumerate()
-                    .map(|(y, l)| l.into_iter().enumerate().map(move |(x, v)| (x, y, v)))
-                    .flatten()
-                    .map(|(x, y, v)| {
-                        Rectangle::new(
-                            [(x, y), (x + 1, y + 1)],
-                            HSLColor(
-                                240.0 / 360.0 - 240.0 / 360.0 * color_map(v),
-                                0.7,
-                                0.1 + 0.4 * color_map(v),
-                            )
-                            .filled(),
+        mesh_map.draw()?;
+        chart_map.draw_series(
+            self.matrix
+                .into_iter()
+                .enumerate()
+                .map(|(y, l)| l.into_iter().enumerate().map(move |(x, v)| (x, y, v)))
+                .flatten()
+                .map(|(x, y, v)| {
+                    Rectangle::new(
+                        [(x, y), (x + 1, y + 1)],
+                        HSLColor(
+                            240.0 / 360.0 - 240.0 / 360.0 * color_map(v),
+                            0.7,
+                            0.1 + 0.4 * color_map(v),
                         )
-                    }),
-            )
-            .expect("plotting pixels");
-        area.present().expect("writing picture to file");
+                        .filled(),
+                    )
+                }),
+        )?;
+        area.present()?;
 
-        let mut builder = ChartBuilder::on(&bar);
-        builder
+        let mut builder_bar = ChartBuilder::on(&bar);
+        builder_bar
             .margin_right(2.percent_width().in_pixels(&self.draw_area))
             .margin_top(2.percent_height().in_pixels(&self.draw_area))
             .margin_bottom(10.percent_height().in_pixels(&self.draw_area)) //take the space for hidden x axis
             .y_label_area_size(10.percent_width().in_pixels(&self.draw_area));
-        let mut chart = builder
-            .build_cartesian_2d((0.)..1., range_min..range_max)
-            .expect("building colorbar");
-        let mut mesh = chart.configure_mesh();
+        let mut chart_bar = builder_bar.build_cartesian_2d((0f64)..1., range_min..range_max)?;
+        let mut mesh_bar = chart_bar.configure_mesh();
         let step = range / (column_len - 1).max(1) as f64;
-        mesh.disable_x_mesh()
+        mesh_bar
+            .disable_x_mesh()
             .disable_y_mesh()
             .disable_x_axis()
             .y_label_style(("sans-serif", 5.percent_width().in_pixels(&self.draw_area)));
-        mesh.draw().expect("drawing colorbar mesh");
-        chart
-            .draw_series(
-                std::iter::successors(Some(range_min), |x| Some(step + x))
-                    .take_while(|x| *x <= range_max)
-                    .map(|v| {
-                        Rectangle::new(
-                            [(0., v - step / 2.), (1., v + step / 2.)],
-                            HSLColor(
-                                240.0 / 360.0 - 240.0 / 360.0 * color_map(v),
-                                0.7,
-                                0.1 + 0.4 * color_map(v),
-                            )
-                            .filled(),
+        mesh_bar.draw()?;
+        chart_bar.draw_series(
+            std::iter::successors(Some(range_min), |x| Some(step + x))
+                .take_while(|x| *x <= range_max)
+                .map(|v| {
+                    Rectangle::new(
+                        [(0., v - step / 2.), (1., v + step / 2.)],
+                        HSLColor(
+                            240.0 / 360.0 - 240.0 / 360.0 * color_map(v),
+                            0.7,
+                            0.1 + 0.4 * color_map(v),
                         )
-                    }),
-            )
-            .expect("plotting colorbar");
-        bar.present().expect("writing colorbar to file");
+                        .filled(),
+                    )
+                }),
+        )?;
+        bar.present()?;
+        return Ok(chart_map.into_coord_trans());
     }
 }
