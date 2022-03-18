@@ -396,10 +396,7 @@ impl<DB: DrawingBackend> ColorMapVisualizer<DB, f64, fn(&usize) -> String, fn(&u
         }
         let row_len = self.matrix.last().map_or(0, |r| r.len());
         let column_len = self.matrix.len();
-        let mut chart_map = builder_map.build_cartesian_2d(
-            (0..row_len).step(row_len / 5),
-            (0..column_len).step(column_len / 5),
-        )?;
+        let mut chart_map = builder_map.build_cartesian_2d(0..row_len, 0..column_len)?;
         let mut mesh_map = chart_map.configure_mesh();
         mesh_map
             .x_label_style(("sans-serif", 5.percent_height().in_pixels(&self.draw_area)))
