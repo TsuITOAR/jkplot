@@ -498,12 +498,25 @@ fn draw_map<DB: DrawingBackend>(
     color_map: impl Fn(f64) -> f64 + Sync,
 ) {
     const MAX_PARTS_NUM: usize = 8;
-    debug_assert!(data.len() % MAX_PARTS_NUM == 0);
+    const MIN_PARTS_LEN: usize = 1024;
+    let column_num = data.first().map_or(0, |x| x.len());
+    let row_num = data.len();
+    let parts_num = ((column_num * row_num + MIN_PARTS_LEN - 1) / MIN_PARTS_LEN).min(MAX_PARTS_NUM);
+    let parts_row_len = (row_num + parts_num - 1) / parts_num;
+    let mut areas = Vec::with_capacity(parts_num);
+    let mut area_left = ctx.plotting_area().strip_coord_spec();
+    let split_pixels = (100. * parts_row_len as f64 / row_num as f64)
+        .percent_height()
+        .in_pixels(&area_left);
+    let total_pixels = area_left.dim_in_pixel().1;
+    (0..(parts_num - 1)).for_each(|i| {
+        let (upper, lower) =
+            area_left.split_vertically(total_pixels as i32 - (i as i32 + 1) * split_pixels);
+        area_left = upper;
+        areas.push(lower);
+    });
+    areas.push(area_left);
     use rayon::prelude::*;
-    let areas = ctx
-        .plotting_area()
-        .strip_coord_spec()
-        .split_evenly((MAX_PARTS_NUM, 1));
     let mut sub_plots: Vec<_> = areas
         .iter()
         .map(|x| BitMapElement::new((0, 0), x.dim_in_pixel()))
@@ -511,8 +524,7 @@ fn draw_map<DB: DrawingBackend>(
     let color_map = &color_map;
     sub_plots
         .par_iter_mut()
-        .rev()
-        .zip(data.par_chunks(data.len() / MAX_PARTS_NUM))
+        .zip(data.par_chunks(parts_row_len))
         .for_each(|(s, d)| {
             ChartBuilder::on(&s.as_bitmap_backend().into_drawing_area())
                 .build_cartesian_2d(0..d.first().map_or(0, |x| x.len()), 0..d.len())
