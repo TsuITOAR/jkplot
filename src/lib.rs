@@ -416,25 +416,7 @@ impl<DB: DrawingBackend> ColorMapVisualizer<DB, f64, fn(&usize) -> String, fn(&u
             mesh_map.y_label_formatter(f);
         }
         mesh_map.draw()?;
-        chart_map.draw_series(
-            self.matrix
-                .iter()
-                .enumerate()
-                .map(|(y, l)| l.into_iter().enumerate().map(move |(x, v)| (x, y, v)))
-                .flatten()
-                .map(|(x, y, v)| {
-                    Rectangle::new(
-                        [(x, y), (x + 1, y + 1)],
-                        HSLColor(
-                            240.0 / 360.0 - 240.0 / 360.0 * color_map(*v),
-                            0.7,
-                            0.1 + 0.4 * color_map(*v),
-                        )
-                        .filled(),
-                    )
-                }),
-        )?;
-        area.present()?;
+        draw_map(&mut chart_map, &self.matrix, color_map);
 
         let mut builder_bar = ChartBuilder::on(&bar);
         builder_bar
@@ -466,7 +448,97 @@ impl<DB: DrawingBackend> ColorMapVisualizer<DB, f64, fn(&usize) -> String, fn(&u
                     )
                 }),
         )?;
-        bar.present()?;
+        self.draw_area.present()?;
         return Ok(chart_map.into_coord_trans());
     }
+}
+
+#[cfg(not(feature = "rayon"))]
+fn draw_map<DB: DrawingBackend>(
+    ctx: &mut ChartContext<
+        DB,
+        Cartesian2d<
+            plotters::coord::types::RangedCoordusize,
+            plotters::coord::types::RangedCoordusize,
+        >,
+    >,
+    data: &Vec<Vec<f64>>,
+    color_map: impl Fn(f64) -> f64,
+) {
+    ctx.draw_series(
+        data.iter()
+            .enumerate()
+            .map(|(y, l)| l.into_iter().enumerate().map(move |(x, v)| (x, y, v)))
+            .flatten()
+            .map(|(x, y, v)| {
+                Rectangle::new(
+                    [(x, y), (x + 1, y + 1)],
+                    HSLColor(
+                        240.0 / 360.0 - 240.0 / 360.0 * color_map(*v),
+                        0.7,
+                        0.1 + 0.4 * color_map(*v),
+                    )
+                    .filled(),
+                )
+            }),
+    )
+    .expect("plotting reactangles");
+}
+
+#[cfg(feature = "rayon")]
+fn draw_map<DB: DrawingBackend>(
+    ctx: &mut ChartContext<
+        DB,
+        Cartesian2d<
+            plotters::coord::types::RangedCoordusize,
+            plotters::coord::types::RangedCoordusize,
+        >,
+    >,
+    data: &Vec<Vec<f64>>,
+    color_map: impl Fn(f64) -> f64 + Sync,
+) {
+    const MAX_PARTS_NUM: usize = 8;
+    debug_assert!(data.len() % MAX_PARTS_NUM == 0);
+    use rayon::prelude::*;
+    let areas = ctx
+        .plotting_area()
+        .strip_coord_spec()
+        .split_evenly((MAX_PARTS_NUM, 1));
+    let mut sub_plots: Vec<_> = areas
+        .iter()
+        .map(|x| BitMapElement::new((0, 0), x.dim_in_pixel()))
+        .collect::<Vec<_>>();
+    let color_map = &color_map;
+    sub_plots
+        .par_iter_mut()
+        .rev()
+        .zip(data.par_chunks(data.len() / MAX_PARTS_NUM))
+        .for_each(|(s, d)| {
+            ChartBuilder::on(&s.as_bitmap_backend().into_drawing_area())
+                .build_cartesian_2d(0..d.first().map_or(0, |x| x.len()), 0..d.len())
+                .expect("chart builder on subplot")
+                .draw_series(
+                    d.iter()
+                        .enumerate()
+                        .map(move |(y, v)| {
+                            v.iter().enumerate().map(move |(x, v)| {
+                                Rectangle::new(
+                                    [(x, y), (x + 1, y + 1)],
+                                    HSLColor(
+                                        240.0 / 360.0 - 240.0 / 360.0 * color_map(*v),
+                                        0.7,
+                                        0.1 + 0.4 * color_map(*v),
+                                    )
+                                    .filled(),
+                                )
+                            })
+                        })
+                        .flatten(),
+                )
+                .expect("drawing rectangles");
+        });
+    areas
+        .into_iter()
+        .zip(sub_plots.into_iter())
+        .for_each(|(a, s)| a.draw(&s).expect("placing subplots on area"))
 }
