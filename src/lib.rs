@@ -6,7 +6,6 @@ use plotters::{
 use std::ops::Range;
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
-
 const MIN_BASE: f64 = 10.;
 const MAX_MAINTAIN: u32 = 100;
 
@@ -484,6 +483,11 @@ fn draw_map<DB: DrawingBackend>(
     )
     .expect("plotting reactangles");
 }
+#[cfg(all(feature = "wasm", not(target_arch = "wasm32")))]
+std::compile_error!("wasm feature can be only used with wasm32 target");
+
+#[cfg(all(feature = "wasm", target_arch = "wasm32"))]
+pub use wasm_bindgen_rayon::init_thread_pool;
 
 #[cfg(feature = "rayon")]
 fn draw_map<DB: DrawingBackend>(
