@@ -483,10 +483,10 @@ fn draw_map<DB: DrawingBackend>(
     )
     .expect("plotting reactangles");
 }
-#[cfg(all(feature = "wasm", not(target_arch = "wasm32")))]
-std::compile_error!("wasm feature can be only used with wasm32 target");
+#[cfg(all(feature = "wasm-rayon", not(target_arch = "wasm32")))]
+std::compile_error!("wasm-rayon feature can be only used with wasm32 target");
 
-#[cfg(all(feature = "wasm", target_arch = "wasm32"))]
+#[cfg(all(feature = "wasm-rayon", target_arch = "wasm32"))]
 pub use wasm_bindgen_rayon::init_thread_pool;
 
 #[cfg(feature = "rayon")]
