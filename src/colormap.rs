@@ -5,7 +5,6 @@ pub struct RawMapVisualizer<
     XF: Fn(&usize) -> String = fn(&usize) -> String,
     YF: Fn(&usize) -> String = fn(&usize) -> String,
 > {
-    matrix: Vec<Vec<B>>,
     color_range: DrawRange<Range<B>>,
     caption: Option<String>,
     x_desc: Option<String>,
@@ -20,7 +19,6 @@ impl<B, XF: Fn(&usize) -> String, YF: Fn(&usize) -> String> Default
 {
     fn default() -> Self {
         Self {
-            matrix: Vec::new(),
             color_range: DrawRange::Auto,
             caption: None,
             x_desc: None,
@@ -32,17 +30,19 @@ impl<B, XF: Fn(&usize) -> String, YF: Fn(&usize) -> String> Default
     }
 }
 
-impl RawMapVisualizer<f64, fn(&usize) -> String, fn(&usize) -> String> {
+impl<B> RawMapVisualizer<B, fn(&usize) -> String, fn(&usize) -> String> {
     pub fn binding<DB: DrawingBackend>(
         self,
+        matrix: Vec<Vec<B>>,
         draw_area: DrawingArea<DB, Shift>,
-    ) -> ColorMapVisualizer<DB, f64, fn(&usize) -> String, fn(&usize) -> String> {
+    ) -> ColorMapVisualizer<DB, B, fn(&usize) -> String, fn(&usize) -> String> {
         ColorMapVisualizer {
             draw_area,
+            matrix,
             raw: self,
         }
     }
-    pub fn set_color_range(&mut self, x: Range<f64>) -> &mut Self {
+    pub fn set_color_range(&mut self, x: Range<B>) -> &mut Self {
         self.color_range = DrawRange::Static(x);
         self
     }
@@ -66,12 +66,9 @@ impl RawMapVisualizer<f64, fn(&usize) -> String, fn(&usize) -> String> {
         self.y_label_formatter = Some(y_formatter);
         self
     }
-    pub fn push(&mut self, row: Vec<f64>) -> &mut Self {
-        debug_assert!(self
-            .matrix
-            .last()
-            .map(|x| x.len() == row.len())
-            .unwrap_or(true));
+}
+impl RawMapVisualizer<f64, fn(&usize) -> String, fn(&usize) -> String> {
+    pub fn update_range(&mut self, row: &[f64]) -> &mut Self {
         row.iter().for_each(|x| {
             if let Some(ref mut o) = self.auto_range {
                 if o.start > *x {
@@ -83,18 +80,18 @@ impl RawMapVisualizer<f64, fn(&usize) -> String, fn(&usize) -> String> {
                 self.auto_range = Some((*x)..(*x));
             }
         });
-        self.matrix.push(row);
         self
     }
     pub fn draw_on<DB: DrawingBackend>(
         &self,
+        matrix: &Vec<Vec<f64>>,
         draw_area: &DrawingArea<DB, Shift>,
     ) -> Result<impl Fn((i32, i32)) -> Option<(usize, usize)>, DrawingAreaErrorKind<DB::ErrorType>>
     {
         let (range_max, range_min) = match self.color_range.clone() {
             DrawRange::Auto => self
                 .auto_range
-                .clone()
+                .as_ref()
                 .map(|x| (x.end, x.start))
                 .unwrap_or((1., 0.)),
             DrawRange::Static(s) => (s.end, s.start),
@@ -116,8 +113,8 @@ impl RawMapVisualizer<f64, fn(&usize) -> String, fn(&usize) -> String> {
         if let Some(ref s) = self.caption {
             builder_map.caption(s, ("sans-serif", 2.5.percent_height().in_pixels(draw_area)));
         }
-        let row_len = self.matrix.last().map_or(0, |r| r.len());
-        let column_len = self.matrix.len();
+        let row_len = matrix.last().map_or(0, |r| r.len());
+        let column_len = matrix.len();
         let mut chart_map = builder_map.build_cartesian_2d(0..row_len, 0..column_len)?;
         let mut mesh_map = chart_map.configure_mesh();
         mesh_map
@@ -138,7 +135,7 @@ impl RawMapVisualizer<f64, fn(&usize) -> String, fn(&usize) -> String> {
             mesh_map.y_label_formatter(f);
         }
         mesh_map.draw()?;
-        draw_map(&mut chart_map, &self.matrix, color_map);
+        draw_map(&mut chart_map, matrix, color_map);
 
         let mut builder_bar = ChartBuilder::on(&bar);
         builder_bar
@@ -182,6 +179,7 @@ pub struct ColorMapVisualizer<
     YF: Fn(&usize) -> String = fn(&usize) -> String,
 > {
     draw_area: DrawingArea<DB, Shift>,
+    matrix: Vec<Vec<B>>,
     raw: RawMapVisualizer<B, XF, YF>,
 }
 
@@ -190,6 +188,7 @@ impl<'a> ColorMapVisualizer<BitMapBackend<'a>, f64, fn(&usize) -> String, fn(&us
     pub fn new<P: AsRef<Path>>(path: &'a P, size: (u32, u32)) -> Self {
         Self {
             draw_area: BitMapBackend::new(path, size).into_drawing_area(),
+            matrix: Vec::new(),
             raw: Default::default(),
         }
     }
@@ -198,12 +197,14 @@ impl<DB: DrawingBackend> ColorMapVisualizer<DB, f64, fn(&usize) -> String, fn(&u
     pub fn on_backend(back_end: DB) -> Self {
         Self {
             draw_area: back_end.into_drawing_area(),
+            matrix: Vec::new(),
             raw: Default::default(),
         }
     }
     pub fn on_draw_area(draw_area: DrawingArea<DB, Shift>) -> Self {
         Self {
             draw_area,
+            matrix: Vec::new(),
             raw: Default::default(),
         }
     }
@@ -232,14 +233,20 @@ impl<DB: DrawingBackend> ColorMapVisualizer<DB, f64, fn(&usize) -> String, fn(&u
         self
     }
     pub fn push(&mut self, row: Vec<f64>) -> &mut Self {
-        self.raw.push(row);
+        debug_assert!(self
+            .matrix
+            .last()
+            .map(|x| x.len() == row.len())
+            .unwrap_or(true));
+        self.raw.update_range(&row);
+        self.matrix.push(row);
         self
     }
     pub fn draw(
         &self,
     ) -> Result<impl Fn((i32, i32)) -> Option<(usize, usize)>, DrawingAreaErrorKind<DB::ErrorType>>
     {
-        self.raw.draw_on(&self.draw_area)
+        self.raw.draw_on(&self.matrix, &self.draw_area)
     }
 }
 
