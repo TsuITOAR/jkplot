@@ -88,6 +88,9 @@ impl RawMapVisualizer<f64, fn(&usize) -> String, fn(&usize) -> String> {
         draw_area: &DrawingArea<DB, Shift>,
     ) -> Result<impl Fn((i32, i32)) -> Option<(usize, usize)>, DrawingAreaErrorKind<DB::ErrorType>>
     {
+        let row_len = matrix.last().map_or(0, |r| r.len());
+        let column_len = matrix.len();
+        assert_ne!(row_len * column_len, 0);
         let (range_max, range_min) = match self.color_range.clone() {
             DrawRange::Auto => self
                 .auto_range
@@ -113,8 +116,7 @@ impl RawMapVisualizer<f64, fn(&usize) -> String, fn(&usize) -> String> {
         if let Some(ref s) = self.caption {
             builder_map.caption(s, ("sans-serif", 2.5.percent_height().in_pixels(draw_area)));
         }
-        let row_len = matrix.last().map_or(0, |r| r.len());
-        let column_len = matrix.len();
+
         let mut chart_map = builder_map.build_cartesian_2d(0..row_len, 0..column_len)?;
         let mut mesh_map = chart_map.configure_mesh();
         mesh_map
@@ -143,7 +145,8 @@ impl RawMapVisualizer<f64, fn(&usize) -> String, fn(&usize) -> String> {
             .margin_top(2.percent_height().in_pixels(draw_area))
             .margin_bottom(10.percent_height().in_pixels(draw_area)) //take the space for hidden x axis
             .y_label_area_size(10.percent_width().in_pixels(draw_area));
-        let mut chart_bar = builder_bar.build_cartesian_2d((0f64)..1., range_min..range_max)?;
+        let mut chart_bar =
+            builder_bar.build_cartesian_2d((0f64)..1., range_min..(range + range_min))?;
         let mut mesh_bar = chart_bar.configure_mesh();
         let step = range / (column_len - 1).max(1) as f64;
         mesh_bar
