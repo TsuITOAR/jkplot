@@ -109,19 +109,19 @@ impl RawMapVisualizer<f64, fn(&usize) -> String, fn(&usize) -> String> {
         let (area, bar) = draw_area.split_horizontally(RelativeSize::Width(0.85));
         let mut builder_map = ChartBuilder::on(&area);
         builder_map
-            .margin_right(2.percent_width().in_pixels(draw_area))
-            .margin_top(2.percent_height().in_pixels(draw_area))
-            .y_label_area_size(10.percent_width().in_pixels(draw_area))
-            .x_label_area_size(10.percent_height().in_pixels(draw_area));
+            .margin_right(2.percent().in_pixels(draw_area))
+            .margin_top(2.percent().in_pixels(draw_area))
+            .y_label_area_size(10.percent().in_pixels(draw_area))
+            .x_label_area_size(10.percent().in_pixels(draw_area));
         if let Some(ref s) = self.caption {
-            builder_map.caption(s, ("sans-serif", 2.5.percent_height().in_pixels(draw_area)));
+            builder_map.caption(s, ("sans-serif", 2.5.percent().in_pixels(draw_area)));
         }
 
         let mut chart_map = builder_map.build_cartesian_2d(0..row_len, 0..column_len)?;
         let mut mesh_map = chart_map.configure_mesh();
         mesh_map
-            .x_label_style(("sans-serif", 5.percent_height().in_pixels(draw_area)))
-            .y_label_style(("sans-serif", 5.percent_width().in_pixels(draw_area)))
+            .x_label_style(("sans-serif", 5.percent().in_pixels(draw_area)))
+            .y_label_style(("sans-serif", 5.percent().in_pixels(draw_area)))
             .disable_x_mesh()
             .disable_y_mesh();
         if let Some(ref s) = self.x_desc {
@@ -141,10 +141,10 @@ impl RawMapVisualizer<f64, fn(&usize) -> String, fn(&usize) -> String> {
 
         let mut builder_bar = ChartBuilder::on(&bar);
         builder_bar
-            .margin_right(2.percent_width().in_pixels(draw_area))
-            .margin_top(2.percent_height().in_pixels(draw_area))
-            .margin_bottom(10.percent_height().in_pixels(draw_area)) //take the space for hidden x axis
-            .y_label_area_size(10.percent_width().in_pixels(draw_area));
+            .margin_right(2.percent().in_pixels(draw_area))
+            .margin_top(2.percent().in_pixels(draw_area))
+            .margin_bottom(10.percent().in_pixels(draw_area)) //take the space for hidden x axis
+            .y_label_area_size(10.percent().in_pixels(draw_area));
         let mut chart_bar =
             builder_bar.build_cartesian_2d((0f64)..1., range_min..(range + range_min))?;
         let mut mesh_bar = chart_bar.configure_mesh();
@@ -153,7 +153,7 @@ impl RawMapVisualizer<f64, fn(&usize) -> String, fn(&usize) -> String> {
             .disable_x_mesh()
             .disable_y_mesh()
             .disable_x_axis()
-            .y_label_style(("sans-serif", 5.percent_width().in_pixels(draw_area)));
+            .y_label_style(("sans-serif", 5.percent().in_pixels(draw_area)));
         mesh_bar.draw()?;
         chart_bar.draw_series(
             std::iter::successors(Some(range_min), |x| Some(step + x))
@@ -306,7 +306,7 @@ fn draw_map<DB: DrawingBackend>(
     let mut areas = Vec::with_capacity(parts_num);
     let mut area_left = ctx.plotting_area().strip_coord_spec();
     let split_pixels = (100. * parts_row_len as f64 / row_num as f64)
-        .percent_height()
+        .percent()
         .in_pixels(&area_left);
     let total_pixels = area_left.dim_in_pixel().1;
     (0..(parts_num - 1)).for_each(|i| {
